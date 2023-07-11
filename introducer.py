@@ -1,5 +1,3 @@
-import asyncio
-
 from pathlib import Path
 from typing import Any, Coroutine, Dict
 
@@ -8,22 +6,22 @@ import discord
 from discord.ext import commands
 from discord.ext.commands.context import Context
 
-from secret import TOKEN
-
 THIS_DIR = Path( __file__ ).parent
 FFMPEG_EXE = THIS_DIR / 'ffmpeg/ffmpeg.exe'
 
-USER_SOUNDS: Dict[ int, str ] = {
+SOUNDS_DIR = THIS_DIR / 'sounds'
+
+USER_SOUNDS: Dict[ int, Path ] = {
 }
 
-DEFAULT_JOIN_SOUND = 'default_join.mp3'
+DEFAULT_JOIN_SOUND = SOUNDS_DIR / 'default_join.mp3'
 
-class Introducer( commands.Cog ):
+class IntroducerCog( commands.Cog ):
     def __init__( self, bot: commands.Bot ) -> None:
         self.bot = bot
 
     async def cog_command_error( self, ctx: Context, error: Exception ) -> Coroutine[ Any, Any, None ]:
-        print( f'COMMAND ERROR: {error}' )
+        print( f'COG {self.__cog_name__} COMMAND ERROR: {error}' )
 
     @commands.Cog.listener()
     async def on_voice_state_update( self, member: discord.Member, before: discord.VoiceState, after: discord.VoiceState ):
@@ -46,28 +44,6 @@ class Introducer( commands.Cog ):
                 # if all( m.bot or m == member for m in after.channel.members ):
                 #     return
 
-                sound_mp3 = USER_SOUNDS.get( member.id, 'default_join.mp3' )
+                sound_mp3 = USER_SOUNDS.get( member.id, DEFAULT_JOIN_SOUND )
                 source = discord.PCMVolumeTransformer( discord.FFmpegPCMAudio( source=sound_mp3, executable=FFMPEG_EXE ) )
                 voice_client.play( source, after=lambda e: print( f'Player error: {e}' ) if e else None )
-
-intents = discord.Intents.default()
-intents.message_content = True
-intents.voice_states = True
-
-bot = commands.Bot(
-    command_prefix='!',
-    intents=intents,
-)
-
-@bot.event
-async def on_ready():
-    print( f'Logged in as {bot.user} (ID: {bot.user.id})' )
-    print( '-' * 100 )
-
-async def main():
-    async with bot:
-        await bot.add_cog( Introducer( bot ) )
-        await bot.start( TOKEN )
-
-if __name__ == '__main__':
-    asyncio.run( main() )
