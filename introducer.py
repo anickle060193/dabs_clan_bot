@@ -9,7 +9,6 @@ from discord.ext import commands
 from discord.ext.commands.context import Context
 
 THIS_DIR = Path( __file__ ).parent
-FFMPEG_EXE = THIS_DIR / 'ffmpeg/ffmpeg.exe'
 
 SOUNDS_DIR = THIS_DIR / 'sounds'
 
@@ -57,7 +56,7 @@ class IntroducerCog( commands.Cog ):
                     played_event.set()
 
                 sound_mp3 = USER_SOUNDS.get( member.id, DEFAULT_SOUND )
-                source = discord.PCMVolumeTransformer( discord.FFmpegPCMAudio( source=sound_mp3, executable=FFMPEG_EXE ) )
+                source = discord.PCMVolumeTransformer( discord.FFmpegPCMAudio( source=sound_mp3 ) )
                 voice_client.play( source, after=after_play )
 
                 await played_event.wait()
