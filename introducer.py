@@ -1,4 +1,5 @@
 import asyncio
+import re
 
 from pathlib import Path
 from typing import Any, Coroutine
@@ -7,6 +8,7 @@ import discord
 
 from discord.ext import commands
 from discord.ext.commands.context import Context
+from google.cloud import texttospeech_v1 as gtts
 
 THIS_DIR = Path( __file__ ).parent
 
@@ -14,9 +16,12 @@ SOUNDS_DIR = THIS_DIR / 'sounds'
 
 DEFAULT_INTRODUCTION_PATH = SOUNDS_DIR / 'default.mp3'
 
+MEMBER_NAME_RE = re.compile( r'\d*$' )
+
 class IntroducerCog( commands.Cog ):
     def __init__( self, bot: commands.Bot ) -> None:
         self.bot = bot
+        self.gtts_client = gtts.TextToSpeechAsyncClient()
 
     async def cog_command_error( self, ctx: Context, error: Exception ) -> Coroutine[ Any, Any, None ]:
         print( f'COG {self.__cog_name__} COMMAND ERROR: {error}' )
@@ -45,6 +50,36 @@ class IntroducerCog( commands.Cog ):
         # if all( m.bot or m == member for m in after.channel.members ):
         #     return
 
+        introduction_mp3_path = SOUNDS_DIR / f'{member.id}.mp3'
+        if not introduction_mp3_path.is_file():
+            try:
+                print( 'Generating introduction for', member.name )
+                member_name = MEMBER_NAME_RE.sub( '', member.nick or member.display_name )
+
+                tts_input = gtts.SynthesisInput()
+                tts_input.text = f'{member_name} has joined the chat'
+
+                audio_config = gtts.AudioConfig()
+                audio_config.audio_encoding = 'MP3'
+                audio_config.effects_profile_id = [ 'headphone-class-device' ]
+
+                voice = gtts.VoiceSelectionParams()
+                voice.language_code = 'en-US'
+                voice.name = 'en-US-Wavenet-F'
+
+                request = gtts.SynthesizeSpeechRequest(
+                    input=tts_input,
+                    audio_config=audio_config,
+                    voice=voice,
+                )
+
+                response = await self.gtts_client.synthesize_speech( request=request )
+
+                introduction_mp3_path.write_bytes( response.audio_content )
+            except Exception as ex:
+                print( 'Failed to generate TTS intro:', ex )
+                introduction_mp3_path = DEFAULT_INTRODUCTION_PATH
+
         played_event = asyncio.Event()
 
         def after_play( ex: Exception | None ):
@@ -52,10 +87,6 @@ class IntroducerCog( commands.Cog ):
                 print( 'Play error:', ex )
 
             played_event.set()
-
-        introduction_mp3_path = SOUNDS_DIR / f'{member.id}.mp3'
-        if not introduction_mp3_path.is_file():
-            introduction_mp3_path = DEFAULT_INTRODUCTION_PATH
 
         source = discord.PCMVolumeTransformer( discord.FFmpegPCMAudio( source=str( introduction_mp3_path ) ) )
         voice_client.play( source, after=after_play )
