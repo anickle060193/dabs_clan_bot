@@ -1,0 +1,28 @@
+{
+  "name": "dabs_clan_discord_bot",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "start:dev": "tsx src/index.ts",
+    "discord:deps": "tsx src/discordDependencies.ts"
+  },
+  "dependencies": {
+    "@discordjs/opus": "^0.9.0",
+    "@discordjs/voice": "^0.16.0",
+    "discord.js": "^14.11.0",
+    "dotenv": "^16.3.1",
+    "ffmpeg-static": "^5.1.0",
+    "libsodium-wrappers": "^0.7.11",
+    "tsx": "^3.12.7",
+    "winston": "^3.10.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.4.2",
+    "@typescript-eslint/eslint-plugin": "^6.1.0",
+    "@typescript-eslint/parser": "^6.1.0",
+    "eslint": "^8.45.0",
+    "eslint-import-resolver-typescript": "^3.5.5",
+    "eslint-plugin-import": "^2.27.5",
+    "typescript": "^5.1.6"
+  }
+}
