@@ -25,38 +25,40 @@ class IntroducerCog( commands.Cog ):
     async def on_voice_state_update( self, member: discord.Member, before: discord.VoiceState, after: discord.VoiceState ):
         if member.bot:
             return
+        if before.channel == after.channel:
+            return
+        if not after.channel:
+            return
 
-        if before.channel != after.channel:
-            if after.channel:
-                print( member.name, f'(ID: {member.id})', 'joined', after.channel.name )
+        print( member.name, f'(ID: {member.id})', 'joined', after.channel.name, f'(ID: {after.channel.id})' )
 
-                voice_client: discord.VoiceClient | None = discord.utils.get( self.bot.voice_clients, channel=after.channel )
-                if voice_client is None:
-                    voice_client = discord.utils.get( self.bot.voice_clients, guild=after.channel.guild )
-                    if voice_client is not None:
-                        await voice_client.disconnect()
+        voice_client: discord.VoiceClient | None = discord.utils.get( self.bot.voice_clients, channel=after.channel )
+        if voice_client is None:
+            voice_client = discord.utils.get( self.bot.voice_clients, guild=after.channel.guild )
+            if voice_client is not None:
+                await voice_client.disconnect()
 
-                    voice_client = await after.channel.connect( self_mute=False, self_deaf=True )
-                else:
-                    await voice_client.channel.guild.change_voice_state( channel=voice_client.channel, self_mute=False, self_deaf=True )
+            voice_client = await after.channel.connect( self_mute=False, self_deaf=True )
+        else:
+            await voice_client.channel.guild.change_voice_state( channel=voice_client.channel, self_mute=False, self_deaf=True )
 
-                # if all( m.bot or m == member for m in after.channel.members ):
-                #     return
+        # if all( m.bot or m == member for m in after.channel.members ):
+        #     return
 
-                played_event = asyncio.Event()
+        played_event = asyncio.Event()
 
-                def after_play( ex: Exception | None ):
-                    if ex:
-                        print( 'Play error:', ex )
+        def after_play( ex: Exception | None ):
+            if ex:
+                print( 'Play error:', ex )
 
-                    played_event.set()
+            played_event.set()
 
-                introduction_mp3_path = SOUNDS_DIR / f'{member.id}.mp3'
-                if not introduction_mp3_path.is_file():
-                    introduction_mp3_path = DEFAULT_INTRODUCTION_PATH
+        introduction_mp3_path = SOUNDS_DIR / f'{member.id}.mp3'
+        if not introduction_mp3_path.is_file():
+            introduction_mp3_path = DEFAULT_INTRODUCTION_PATH
 
-                source = discord.PCMVolumeTransformer( discord.FFmpegPCMAudio( source=str( introduction_mp3_path ) ) )
-                voice_client.play( source, after=after_play )
+        source = discord.PCMVolumeTransformer( discord.FFmpegPCMAudio( source=str( introduction_mp3_path ) ) )
+        voice_client.play( source, after=after_play )
 
-                await played_event.wait()
-                await voice_client.channel.guild.change_voice_state( channel=voice_client.channel, self_mute=True, self_deaf=True )
+        await played_event.wait()
+        await voice_client.channel.guild.change_voice_state( channel=voice_client.channel, self_mute=True, self_deaf=True )
