@@ -2,6 +2,7 @@
   "name": "dabs_clan_discord_bot",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "yarn@3.6.1",
   "scripts": {
     "start:dev": "tsx src/index.ts",
     "discord:deps": "tsx src/discordDependencies.ts"
