@@ -1,7 +1,7 @@
 import asyncio
 
 from pathlib import Path
-from typing import Any, Coroutine, Dict
+from typing import Any, Coroutine
 
 import discord
 
@@ -12,11 +12,7 @@ THIS_DIR = Path( __file__ ).parent
 
 SOUNDS_DIR = THIS_DIR / 'sounds'
 
-USER_SOUNDS: Dict[ int, Path ] = {
-    429914580592885771: SOUNDS_DIR / 'shini.mp3',
-}
-
-DEFAULT_SOUND = SOUNDS_DIR / 'default.mp3'
+DEFAULT_INTRODUCTION_PATH = SOUNDS_DIR / 'default.mp3'
 
 class IntroducerCog( commands.Cog ):
     def __init__( self, bot: commands.Bot ) -> None:
@@ -55,8 +51,11 @@ class IntroducerCog( commands.Cog ):
 
                     played_event.set()
 
-                sound_mp3 = USER_SOUNDS.get( member.id, DEFAULT_SOUND )
-                source = discord.PCMVolumeTransformer( discord.FFmpegPCMAudio( source=sound_mp3 ) )
+                introduction_mp3_path = SOUNDS_DIR / f'{member.id}.mp3'
+                if not introduction_mp3_path.is_file():
+                    introduction_mp3_path = DEFAULT_INTRODUCTION_PATH
+
+                source = discord.PCMVolumeTransformer( discord.FFmpegPCMAudio( source=str( introduction_mp3_path ) ) )
                 voice_client.play( source, after=after_play )
 
                 await played_event.wait()
