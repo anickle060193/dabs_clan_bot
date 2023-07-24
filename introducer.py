@@ -23,6 +23,45 @@ class IntroducerCog( commands.Cog ):
         self.bot = bot
         self.gtts_client = gtts.TextToSpeechAsyncClient()
 
+    async def _generate_tts( self, text: str ) -> gtts.SynthesizeSpeechResponse:
+        tts_input = gtts.SynthesisInput()
+        tts_input.text = text
+
+        audio_config = gtts.AudioConfig()
+        audio_config.audio_encoding = 'MP3'
+        audio_config.effects_profile_id = [ 'headphone-class-device' ]
+
+        voice = gtts.VoiceSelectionParams()
+        voice.language_code = 'en-US'
+        voice.name = 'en-US-Wavenet-F'
+
+        request = gtts.SynthesizeSpeechRequest(
+            input=tts_input,
+            audio_config=audio_config,
+            voice=voice,
+        )
+
+        return await self.gtts_client.synthesize_speech( request=request )
+
+    async def _get_introduction_sound( self, member: discord.Member ) -> Path:
+        introduction_mp3_path = SOUNDS_DIR / f'{member.id}.mp3'
+        if introduction_mp3_path.is_file():
+            return introduction_mp3_path
+
+        try:
+            print( 'Generating introduction for', member.name )
+            member_name = MEMBER_NAME_RE.sub( '', member.nick or member.display_name )
+
+            response = await self._generate_tts( f'{member_name} has joined the chat' )
+
+            introduction_mp3_path.write_bytes( response.audio_content )
+
+            return introduction_mp3_path
+        except Exception as ex:
+            print( 'Failed to generate TTS intro for', member.name, ':', ex )
+
+        return DEFAULT_INTRODUCTION_PATH
+
     async def cog_command_error( self, ctx: Context, error: Exception ) -> Coroutine[ Any, Any, None ]:
         print( f'COG {self.__cog_name__} COMMAND ERROR: {error}' )
 
@@ -50,35 +89,7 @@ class IntroducerCog( commands.Cog ):
         # if all( m.bot or m == member for m in after.channel.members ):
         #     return
 
-        introduction_mp3_path = SOUNDS_DIR / f'{member.id}.mp3'
-        if not introduction_mp3_path.is_file():
-            try:
-                print( 'Generating introduction for', member.name )
-                member_name = MEMBER_NAME_RE.sub( '', member.nick or member.display_name )
-
-                tts_input = gtts.SynthesisInput()
-                tts_input.text = f'{member_name} has joined the chat'
-
-                audio_config = gtts.AudioConfig()
-                audio_config.audio_encoding = 'MP3'
-                audio_config.effects_profile_id = [ 'headphone-class-device' ]
-
-                voice = gtts.VoiceSelectionParams()
-                voice.language_code = 'en-US'
-                voice.name = 'en-US-Wavenet-F'
-
-                request = gtts.SynthesizeSpeechRequest(
-                    input=tts_input,
-                    audio_config=audio_config,
-                    voice=voice,
-                )
-
-                response = await self.gtts_client.synthesize_speech( request=request )
-
-                introduction_mp3_path.write_bytes( response.audio_content )
-            except Exception as ex:
-                print( 'Failed to generate TTS intro:', ex )
-                introduction_mp3_path = DEFAULT_INTRODUCTION_PATH
+        introduction_mp3_path = await self._get_introduction_sound( member )
 
         played_event = asyncio.Event()
 
