@@ -8,7 +8,8 @@ import discord
 
 from discord.ext import commands
 from discord.ext.commands.context import Context
-from google.cloud import texttospeech_v1 as gtts
+
+from tts import TTS
 
 THIS_DIR = Path( __file__ ).parent
 SOUNDS_DIR = THIS_DIR / 'sounds'
@@ -22,27 +23,7 @@ MEMBER_NAME_RE = re.compile( r'\d*$' )
 class IntroducerCog( commands.Cog ):
     def __init__( self, bot: commands.Bot ) -> None:
         self.bot = bot
-        self.gtts_client = gtts.TextToSpeechAsyncClient()
-
-    async def _generate_tts( self, text: str ) -> gtts.SynthesizeSpeechResponse:
-        tts_input = gtts.SynthesisInput()
-        tts_input.text = text
-
-        audio_config = gtts.AudioConfig()
-        audio_config.audio_encoding = 'MP3'
-        audio_config.effects_profile_id = [ 'headphone-class-device' ]
-
-        voice = gtts.VoiceSelectionParams()
-        voice.language_code = 'en-US'
-        voice.name = 'en-US-Wavenet-F'
-
-        request = gtts.SynthesizeSpeechRequest(
-            input=tts_input,
-            audio_config=audio_config,
-            voice=voice,
-        )
-
-        return await self.gtts_client.synthesize_speech( request=request )
+        self.tts = TTS()
 
     async def _get_member_sound( self, tts_text_format: str, member: discord.Member, sounds_path: Path, default: str ) -> Path:
         sound_mp3_path = sounds_path / f'{member.id}.mp3'
@@ -53,16 +34,22 @@ class IntroducerCog( commands.Cog ):
         tts_text = tts_text_format.format( name=member_name )
 
         try:
-            response = await self._generate_tts( tts_text )
-
-            sound_mp3_path.write_bytes( response.audio_content )
+            audio_content = await self.tts.generate_tts( tts_text, language_code='en-US', voice_name='en-US-Wavenet-F' )
+            sound_mp3_path.write_bytes( audio_content )
         except Exception as ex:
             print( f'Failed to generate TTS for "{tts_text}":', ex )
 
         return sound_mp3_path
 
-    async def _get_intro_sound( self, member: discord.Member ) -> Path:
-        return await self._get_member_sound( '{name} has joined the chat', member, INTROS_DIR, 'default.mp3' )
+    async def _get_intro_sound( self, member: discord.Member, welcome=False ) -> Path:
+        if welcome:
+            text_format = 'Welcome {name}'
+            sounds_dir = WELCOMES_DIR
+        else:
+            text_format = '{name} has joined the chat'
+            sounds_dir = INTROS_DIR
+
+        return await self._get_member_sound( text_format, member, sounds_dir, 'default.mp3' )
 
     def _get_channel_voice_client( self, channel: discord.VoiceChannel ) -> discord.VoiceClient | None:
         return discord.utils.get( self.bot.voice_clients, channel=channel )
@@ -99,10 +86,12 @@ class IntroducerCog( commands.Cog ):
 
         print( member.name, f'(ID: {member.id})', 'joined', after.channel.name, f'(ID: {after.channel.id})' )
 
+        welcome = all( m.bot or m == member for m in after.channel.members )
+
         intro_delayer = asyncio.create_task( asyncio.sleep( INTRO_DELAY ) )
 
         chat_joiner = asyncio.create_task( self._join_voice_chat( after.channel ) )
-        sound_creator = asyncio.create_task( self._get_intro_sound( member ) )
+        sound_creator = asyncio.create_task( self._get_intro_sound( member, welcome=welcome ) )
 
         voice_client = await chat_joiner
         sound_mp3_path = await sound_creator
