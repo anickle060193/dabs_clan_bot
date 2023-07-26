@@ -16,6 +16,8 @@ SOUNDS_DIR = THIS_DIR / 'sounds'
 
 DEFAULT_INTRODUCTION_PATH = SOUNDS_DIR / 'default.mp3'
 
+INTRO_DELAY = 0.5
+
 MEMBER_NAME_RE = re.compile( r'\d*$' )
 
 class IntroducerCog( commands.Cog ):
@@ -76,6 +78,8 @@ class IntroducerCog( commands.Cog ):
 
         print( member.name, f'(ID: {member.id})', 'joined', after.channel.name, f'(ID: {after.channel.id})' )
 
+        intro_delayer = asyncio.create_task( asyncio.sleep( INTRO_DELAY ) )
+
         voice_client: discord.VoiceClient | None = discord.utils.get( self.bot.voice_clients, channel=after.channel )
         if voice_client is None:
             voice_client = discord.utils.get( self.bot.voice_clients, guild=after.channel.guild )
@@ -90,6 +94,8 @@ class IntroducerCog( commands.Cog ):
         #     return
 
         introduction_mp3_path = await self._get_introduction_sound( member )
+
+        await intro_delayer
 
         played_event = asyncio.Event()
 
