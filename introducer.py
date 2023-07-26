@@ -64,8 +64,11 @@ class IntroducerCog( commands.Cog ):
 
         return DEFAULT_INTRODUCTION_PATH
 
+    def _get_channel_voice_client( self, channel: discord.VoiceChannel ) -> discord.VoiceClient | None:
+        return discord.utils.get( self.bot.voice_clients, channel=channel )
+
     async def _join_voice_chat( self, channel: discord.VoiceChannel ) -> discord.VoiceClient:
-        voice_client: discord.VoiceClient | None = discord.utils.get( self.bot.voice_clients, channel=channel )
+        voice_client = self._get_channel_voice_client( channel )
         if voice_client is None:
             voice_client = discord.utils.get( self.bot.voice_clients, guild=channel.guild )
             if voice_client is not None:
@@ -86,7 +89,12 @@ class IntroducerCog( commands.Cog ):
             return
         if before.channel == after.channel:
             return
+
         if not after.channel:
+            if all( m.bot for m in before.channel.members ):
+                voice_client = self._get_channel_voice_client( before.channel )
+                if voice_client:
+                    await voice_client.disconnect()
             return
 
         print( member.name, f'(ID: {member.id})', 'joined', after.channel.name, f'(ID: {after.channel.id})' )
