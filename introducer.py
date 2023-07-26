@@ -11,10 +11,9 @@ from discord.ext.commands.context import Context
 from google.cloud import texttospeech_v1 as gtts
 
 THIS_DIR = Path( __file__ ).parent
-
 SOUNDS_DIR = THIS_DIR / 'sounds'
-
-DEFAULT_INTRODUCTION_PATH = SOUNDS_DIR / 'default.mp3'
+INTROS_DIR = SOUNDS_DIR / 'intros'
+WELCOMES_DIR = SOUNDS_DIR / 'welcomes'
 
 INTRO_DELAY = 0.5
 
@@ -45,24 +44,25 @@ class IntroducerCog( commands.Cog ):
 
         return await self.gtts_client.synthesize_speech( request=request )
 
-    async def _get_introduction_sound( self, member: discord.Member ) -> Path:
-        introduction_mp3_path = SOUNDS_DIR / f'{member.id}.mp3'
-        if introduction_mp3_path.is_file():
-            return introduction_mp3_path
+    async def _get_member_sound( self, tts_text_format: str, member: discord.Member, sounds_path: Path, default: str ) -> Path:
+        sound_mp3_path = sounds_path / f'{member.id}.mp3'
+        if sound_mp3_path.is_file():
+            return sound_mp3_path
+
+        member_name = MEMBER_NAME_RE.sub( '', member.nick or member.display_name )
+        tts_text = tts_text_format.format( name=member_name )
 
         try:
-            print( 'Generating introduction for', member.name )
-            member_name = MEMBER_NAME_RE.sub( '', member.nick or member.display_name )
+            response = await self._generate_tts( tts_text )
 
-            response = await self._generate_tts( f'{member_name} has joined the chat' )
-
-            introduction_mp3_path.write_bytes( response.audio_content )
-
-            return introduction_mp3_path
+            sound_mp3_path.write_bytes( response.audio_content )
         except Exception as ex:
-            print( 'Failed to generate TTS intro for', member.name, ':', ex )
+            print( f'Failed to generate TTS for "{tts_text}":', ex )
 
-        return DEFAULT_INTRODUCTION_PATH
+        return sound_mp3_path
+
+    async def _get_intro_sound( self, member: discord.Member ) -> Path:
+        return await self._get_member_sound( '{name} has joined the chat', member, INTROS_DIR, 'default.mp3' )
 
     def _get_channel_voice_client( self, channel: discord.VoiceChannel ) -> discord.VoiceClient | None:
         return discord.utils.get( self.bot.voice_clients, channel=channel )
@@ -101,12 +101,11 @@ class IntroducerCog( commands.Cog ):
 
         intro_delayer = asyncio.create_task( asyncio.sleep( INTRO_DELAY ) )
 
-        voice_client = await self._join_voice_chat( after.channel )
+        chat_joiner = asyncio.create_task( self._join_voice_chat( after.channel ) )
+        sound_creator = asyncio.create_task( self._get_intro_sound( member ) )
 
-        # if all( m.bot or m == member for m in after.channel.members ):
-        #     return
-
-        introduction_mp3_path = await self._get_introduction_sound( member )
+        voice_client = await chat_joiner
+        sound_mp3_path = await sound_creator
 
         await intro_delayer
 
@@ -118,7 +117,7 @@ class IntroducerCog( commands.Cog ):
 
             played_event.set()
 
-        source = discord.PCMVolumeTransformer( discord.FFmpegPCMAudio( source=str( introduction_mp3_path ) ) )
+        source = discord.PCMVolumeTransformer( discord.FFmpegPCMAudio( source=str( sound_mp3_path ) ) )
         voice_client.play( source, after=after_play )
 
         await played_event.wait()
