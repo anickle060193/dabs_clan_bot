@@ -64,6 +64,19 @@ class IntroducerCog( commands.Cog ):
 
         return DEFAULT_INTRODUCTION_PATH
 
+    async def _join_voice_chat( self, channel: discord.VoiceChannel ) -> discord.VoiceClient:
+        voice_client: discord.VoiceClient | None = discord.utils.get( self.bot.voice_clients, channel=channel )
+        if voice_client is None:
+            voice_client = discord.utils.get( self.bot.voice_clients, guild=channel.guild )
+            if voice_client is not None:
+                await voice_client.disconnect()
+
+            voice_client = await channel.connect( self_mute=False, self_deaf=True )
+        else:
+            await voice_client.channel.guild.change_voice_state( channel=voice_client.channel, self_mute=False, self_deaf=True )
+
+        return voice_client
+
     async def cog_command_error( self, ctx: Context, error: Exception ) -> Coroutine[ Any, Any, None ]:
         print( f'COG {self.__cog_name__} COMMAND ERROR: {error}' )
 
@@ -80,15 +93,7 @@ class IntroducerCog( commands.Cog ):
 
         intro_delayer = asyncio.create_task( asyncio.sleep( INTRO_DELAY ) )
 
-        voice_client: discord.VoiceClient | None = discord.utils.get( self.bot.voice_clients, channel=after.channel )
-        if voice_client is None:
-            voice_client = discord.utils.get( self.bot.voice_clients, guild=after.channel.guild )
-            if voice_client is not None:
-                await voice_client.disconnect()
-
-            voice_client = await after.channel.connect( self_mute=False, self_deaf=True )
-        else:
-            await voice_client.channel.guild.change_voice_state( channel=voice_client.channel, self_mute=False, self_deaf=True )
+        voice_client = await self._join_voice_chat( after.channel )
 
         # if all( m.bot or m == member for m in after.channel.members ):
         #     return
