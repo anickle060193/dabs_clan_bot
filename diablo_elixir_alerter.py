@@ -24,7 +24,7 @@ ELIXIR_ALERT_SOUNDS_DIR = SOUNDS_DIR / 'elixir_alerts'
 class DiabloElixirAlerter( commands.Cog ):
     def __init__( self, bot: commands.Bot ) -> None:
         self.bot = bot
-        self.last_alert_time = dict( ( cid, datetime.min ) for cid in DIABLO_VOICE_CHANNEL_IDS )
+        self.next_alert_time = dict( ( cid, datetime.min ) for cid in DIABLO_VOICE_CHANNEL_IDS )
 
         self.elixir_alert.start()
 
@@ -33,7 +33,7 @@ class DiabloElixirAlerter( commands.Cog ):
 
     @tasks.loop( minutes=1 )
     async def elixir_alert( self ):
-        await asyncio.gather( *( self._perform_elixir_alert_safe( cid ) for cid in self.last_alert_time.keys() ), return_exceptions=True )
+        await asyncio.gather( *( self._perform_elixir_alert_safe( cid ) for cid in self.next_alert_time.keys() ), return_exceptions=True )
 
     @elixir_alert.before_loop
     async def before_elixir_alert( self ):
@@ -46,9 +46,9 @@ class DiabloElixirAlerter( commands.Cog ):
         if before.channel == after.channel:
             return
 
-        if before.channel and before.channel.id in self.last_alert_time:
+        if before.channel and before.channel.id in self.next_alert_time:
             await self._perform_elixir_alert( before.channel.id )
-        elif after.channel and after.channel.id in self.last_alert_time:
+        elif after.channel and after.channel.id in self.next_alert_time:
             await self._perform_elixir_alert( after.channel.id )
 
     async def _perform_elixir_alert_safe( self, channel_id: int ):
@@ -60,7 +60,7 @@ class DiabloElixirAlerter( commands.Cog ):
     async def _perform_elixir_alert( self, channel_id: int ):
         print( 'Performing elixir alert:', channel_id )
 
-        if channel_id not in self.last_alert_time:
+        if channel_id not in self.next_alert_time:
             print( 'Unknown channel ID:', channel_id )
             return
 
@@ -73,20 +73,23 @@ class DiabloElixirAlerter( commands.Cog ):
             return
 
         if len( channel.members ) == 0 or all( m.bot for m in channel.members ):
-            print( 'Not members in channel:', channel_id )
-            self.last_alert_time[ channel_id ] = datetime.min
+            if self.next_alert_time[ channel_id ] != datetime.min:
+                print( 'Empty channel detected:', channel_id )
+                self.next_alert_time[ channel_id ] = datetime.min
             return
 
-        if self.last_alert_time[ channel_id ] == datetime.min:
+        if self.next_alert_time[ channel_id ] == datetime.min:
             print( 'First member join detected:', channel_id )
-            self.last_alert_time[ channel_id ] = datetime.now() + AFTER_JOIN_ALERT_DELAY
+            self.next_alert_time[ channel_id ] = datetime.now() + AFTER_JOIN_ALERT_DELAY
             return
 
         now = datetime.now()
-        if ( self.last_alert_time[ channel_id ] + ALERT_INTERVAL ) > now:
+        if self.next_alert_time[ channel_id ] > now:
+            print( 'Waiting for alert time:', channel_id, ( self.next_alert_time[ channel_id ] - now ), 'remaining' )
             return
 
-        self.last_alert_time[ channel_id ] = now + ALERT_INTERVAL
+        print( 'Playing elixir alert:', channel_id )
+        self.next_alert_time[ channel_id ] = now + ALERT_INTERVAL
 
         voice_client = await join_voice_chat( self.bot, channel )
 
