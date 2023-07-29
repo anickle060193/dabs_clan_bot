@@ -2,17 +2,15 @@ import asyncio
 import re
 
 from pathlib import Path
-from typing import Any, Coroutine
 
 import discord
 
 from discord.ext import commands
-from discord.ext.commands.context import Context
 
+from consts import SOUNDS_DIR
 from tts import TTS
+from utils import get_channel_voice_client, join_voice_chat
 
-THIS_DIR = Path( __file__ ).parent
-SOUNDS_DIR = THIS_DIR / 'sounds'
 INTROS_DIR = SOUNDS_DIR / 'intros'
 WELCOMES_DIR = SOUNDS_DIR / 'welcomes'
 
@@ -21,9 +19,9 @@ INTRO_DELAY = 0.5
 MEMBER_NAME_RE = re.compile( r'\d*$' )
 
 class IntroducerCog( commands.Cog ):
-    def __init__( self, bot: commands.Bot ) -> None:
+    def __init__( self, bot: commands.Bot, tts: TTS ) -> None:
         self.bot = bot
-        self.tts = TTS()
+        self.tts = tts
 
     async def _get_member_sound( self, tts_text_format: str, member: discord.Member, sounds_path: Path, default_sound: str ) -> Path:
         sound_mp3_path = sounds_path / f'{member.id}.mp3'
@@ -51,25 +49,6 @@ class IntroducerCog( commands.Cog ):
 
         return await self._get_member_sound( text_format, member, sounds_dir, 'default.mp3' )
 
-    def _get_channel_voice_client( self, channel: discord.VoiceChannel ) -> discord.VoiceClient | None:
-        return discord.utils.get( self.bot.voice_clients, channel=channel )
-
-    async def _join_voice_chat( self, channel: discord.VoiceChannel ) -> discord.VoiceClient:
-        voice_client = self._get_channel_voice_client( channel )
-        if voice_client is None:
-            voice_client = discord.utils.get( self.bot.voice_clients, guild=channel.guild )
-            if voice_client is not None:
-                await voice_client.disconnect()
-
-            voice_client = await channel.connect( self_mute=False, self_deaf=True )
-        else:
-            await voice_client.channel.guild.change_voice_state( channel=voice_client.channel, self_mute=False, self_deaf=True )
-
-        return voice_client
-
-    async def cog_command_error( self, ctx: Context, error: Exception ) -> Coroutine[ Any, Any, None ]:
-        print( f'COG {self.__cog_name__} COMMAND ERROR: {error}' )
-
     @commands.Cog.listener()
     async def on_voice_state_update( self, member: discord.Member, before: discord.VoiceState, after: discord.VoiceState ):
         if member.bot:
@@ -78,10 +57,11 @@ class IntroducerCog( commands.Cog ):
             return
 
         if not after.channel:
-            if all( m.bot for m in before.channel.members ):
-                voice_client = self._get_channel_voice_client( before.channel )
-                if voice_client:
-                    await voice_client.disconnect()
+            if before.channel:
+                if all( m.bot for m in before.channel.members ):
+                    voice_client = get_channel_voice_client( self.bot, before.channel )
+                    if voice_client:
+                        await voice_client.disconnect()
             return
 
         print( member.name, f'(ID: {member.id})', 'joined', after.channel.name, f'(ID: {after.channel.id})' )
@@ -90,7 +70,7 @@ class IntroducerCog( commands.Cog ):
 
         intro_delayer = asyncio.create_task( asyncio.sleep( INTRO_DELAY ) )
 
-        chat_joiner = asyncio.create_task( self._join_voice_chat( after.channel ) )
+        chat_joiner = asyncio.create_task( join_voice_chat( self.bot, after.channel ) )
         sound_creator = asyncio.create_task( self._get_intro_sound( member, welcome=welcome ) )
 
         voice_client = await chat_joiner
@@ -98,16 +78,9 @@ class IntroducerCog( commands.Cog ):
 
         await intro_delayer
 
-        played_event = asyncio.Event()
-
         def after_play( ex: Exception | None ):
             if ex:
-                print( 'Play error:', ex )
-
-            played_event.set()
+                print( 'Failed to play intro:', sound_mp3_path, ex )
 
         source = discord.PCMVolumeTransformer( discord.FFmpegPCMAudio( source=str( sound_mp3_path ) ) )
         voice_client.play( source, after=after_play )
-
-        await played_event.wait()
-        await voice_client.channel.guild.change_voice_state( channel=voice_client.channel, self_mute=True, self_deaf=True )

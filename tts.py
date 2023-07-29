@@ -4,14 +4,17 @@ class TTS:
     def __init__( self ) -> None:
         self.gtts_client = gtts.TextToSpeechAsyncClient()
 
-    async def generate_tts( self, text: str, *, language_code='en-US', voice_name='en-US-Wavenet-F', pitch=None ) -> bytes:
+    async def generate_tts( self, text: str, *, language_code='en-US', voice_name='en-US-Wavenet-F', pitch: float | None = None, speed: float | None = None ) -> bytes:
         tts_input = gtts.SynthesisInput()
         tts_input.text = text
 
         audio_config = gtts.AudioConfig()
-        audio_config.audio_encoding = 'MP3'
+        audio_config.audio_encoding = gtts.AudioEncoding.MP3
         audio_config.effects_profile_id = [ 'headphone-class-device' ]
-        audio_config.pitch = pitch
+        if pitch is not None:
+            audio_config.pitch = pitch
+        if speed is not None:
+            audio_config.speaking_rate = speed
 
         voice = gtts.VoiceSelectionParams()
         voice.language_code = language_code
@@ -39,16 +42,19 @@ if __name__ == '__main__':
             return Path( arg ).resolve().absolute()
 
         parser = argparse.ArgumentParser()
-        parser.add_argument( '--text', '-t', required=True )
-        parser.add_argument( '--lang', '-l', default='en-US' )
-        parser.add_argument( '--voice', '-v', default='en-US-Wavenet-F' )
-        parser.add_argument( '--pitch', '-p', type=float )
-        parser.add_argument( '--output', '-o', required=True, type=_path_arg )
+        text_group = parser.add_mutually_exclusive_group( required=True )
+        text_group.add_argument( '--text' )
+        text_group.add_argument( '--ssml' )
+        parser.add_argument( '--lang', default='en-US' )
+        parser.add_argument( '--voice', default='en-US-Wavenet-F' )
+        parser.add_argument( '--pitch', type=float )
+        parser.add_argument( '--speed', type=float )
+        parser.add_argument( '--output', required=True, type=_path_arg )
         args = parser.parse_args()
 
         tts = TTS()
 
-        audio_content = await tts.generate_tts( args.text, language_code=args.lang, voice_name=args.voice, pitch=args.pitch )
+        audio_content = await tts.generate_tts( args.text, language_code=args.lang, voice_name=args.voice, pitch=args.pitch, speed=args.speed )
 
         args.output.write_bytes( audio_content )
 

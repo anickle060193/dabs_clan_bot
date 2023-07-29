@@ -9,8 +9,10 @@ import discord
 
 from discord.ext import commands
 
+from diablo_elixir_alerter import DiabloElixirAlerter
 from introducer import IntroducerCog
 from secret import TOKEN
+from tts import TTS
 
 THIS_DIR = Path( __file__ ).parent
 
@@ -44,12 +46,15 @@ bot = commands.Bot(
 
 @bot.event
 async def on_ready():
-    print( f'Logged in as {bot.user} (ID: {bot.user.id})' )
+    print( f'Logged in as {bot.user} (ID: {bot.user.id if bot.user else ""})' )
     print( '-' * 100 )
 
 async def main():
+    tts = TTS()
+
     async with bot:
-        await bot.add_cog( IntroducerCog( bot ) )
+        await bot.add_cog( IntroducerCog( bot, tts ) )
+        await bot.add_cog( DiabloElixirAlerter( bot ) )
         await bot.start( TOKEN )
 
 if __name__ == '__main__':
