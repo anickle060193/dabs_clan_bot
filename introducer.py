@@ -25,7 +25,7 @@ class IntroducerCog( commands.Cog ):
         self.bot = bot
         self.tts = TTS()
 
-    async def _get_member_sound( self, tts_text_format: str, member: discord.Member, sounds_path: Path, default: str ) -> Path:
+    async def _get_member_sound( self, tts_text_format: str, member: discord.Member, sounds_path: Path, default_sound: str ) -> Path:
         sound_mp3_path = sounds_path / f'{member.id}.mp3'
         if sound_mp3_path.is_file():
             return sound_mp3_path
@@ -39,7 +39,7 @@ class IntroducerCog( commands.Cog ):
         except Exception as ex:
             print( f'Failed to generate TTS for "{tts_text}":', ex )
 
-        return sound_mp3_path
+        return sounds_path / default_sound
 
     async def _get_intro_sound( self, member: discord.Member, welcome=False ) -> Path:
         if welcome:
