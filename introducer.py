@@ -41,7 +41,7 @@ class IntroducerCog( commands.Cog ):
 
         return sounds_path / default_sound
 
-    async def _get_intro_sound( self, member: discord.Member, welcome=False ) -> Path:
+    async def _get_intro_sound( self, member: discord.Member, welcome: bool = False ) -> Path:
         if welcome:
             text_format = 'Welcome {name}'
             sounds_dir = WELCOME_SOUNDS_DIR

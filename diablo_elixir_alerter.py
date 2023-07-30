@@ -40,7 +40,7 @@ class DiabloElixirAlerter( commands.Cog ):
 
         LOG.info( f'Guild ({guild.name} - {guild.id}) has not Diablo voice channel' )
 
-    def cog_unload( self ):
+    async def cog_unload( self ):
         self.elixir_alert.cancel()
 
     @commands.Cog.listener()
