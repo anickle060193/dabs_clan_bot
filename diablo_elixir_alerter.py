@@ -3,6 +3,7 @@ import logging
 import random
 
 from datetime import datetime, timedelta
+from typing import Dict
 
 import discord
 
@@ -18,18 +19,33 @@ DIABLO_VOICE_CHANNEL_IDS = [
     1128140152418611221, # anickle060193's Test Server - Other Channel
 ]
 
-AFTER_JOIN_ALERT_DELAY = timedelta( minutes=5 )
+AFTER_JOIN_ALERT_DELAY = timedelta( minutes=1 )
 ALERT_INTERVAL = timedelta( minutes=15 )
 
 class DiabloElixirAlerter( commands.Cog ):
     def __init__( self, bot: commands.Bot ) -> None:
         self.bot = bot
-        self.next_alert_time = dict( ( cid, datetime.min ) for cid in DIABLO_VOICE_CHANNEL_IDS )
+        self.next_alert_time: Dict[ int, datetime ] = {}
 
         self.elixir_alert.start()
 
+    def _set_guild_next_alert_time( self, guild: discord.Guild ):
+        for channel_id in DIABLO_VOICE_CHANNEL_IDS:
+            if channel_id not in self.next_alert_time:
+                channel = guild.get_channel( channel_id )
+                if isinstance( channel, discord.VoiceChannel ):
+                    LOG.info( f'Detected guild ({guild.name} - {guild.id}) with Diablo voice channel ({channel.name} - {channel.id}), adding next alert time' )
+                    self.next_alert_time[ channel_id ] = datetime.min
+                    return
+
+        LOG.info( f'Guild ({guild.name} - {guild.id}) has not Diablo voice channel' )
+
     def cog_unload( self ):
         self.elixir_alert.cancel()
+
+    @commands.Cog.listener()
+    async def on_guild_join( self, guild: discord.Guild ):
+        self._set_guild_next_alert_time( guild )
 
     @tasks.loop( minutes=1 )
     async def elixir_alert( self ):
@@ -39,6 +55,9 @@ class DiabloElixirAlerter( commands.Cog ):
     async def before_elixir_alert( self ):
         await self.bot.wait_until_ready()
 
+        for guild in self.bot.guilds:
+            self._set_guild_next_alert_time( guild )
+
     @commands.Cog.listener()
     async def on_voice_state_update( self, member: discord.Member, before: discord.VoiceState, after: discord.VoiceState ):
         if member.bot:
@@ -47,17 +66,17 @@ class DiabloElixirAlerter( commands.Cog ):
             return
 
         if before.channel and before.channel.id in self.next_alert_time:
-            await self._perform_elixir_alert( before.channel.id )
+            await self._perform_elixir_alert_safe( before.channel.id )
         elif after.channel and after.channel.id in self.next_alert_time:
-            await self._perform_elixir_alert( after.channel.id )
+            await self._perform_elixir_alert_safe( after.channel.id, new_member=True )
 
-    async def _perform_elixir_alert_safe( self, channel_id: int ):
+    async def _perform_elixir_alert_safe( self, channel_id: int, new_member: bool = False ):
         try:
-            await self._perform_elixir_alert( channel_id )
+            await self._perform_elixir_alert( channel_id, new_member=new_member )
         except Exception as ex:
             LOG.error( f'Failed to perform elixir alert for channel: {channel_id}', exc_info=ex )
 
-    async def _perform_elixir_alert( self, channel_id: int ):
+    async def _perform_elixir_alert( self, channel_id: int, new_member: bool = False ):
         LOG.debug( f'Performing elixir alert: {channel_id}' )
 
         if channel_id not in self.next_alert_time:
@@ -74,11 +93,11 @@ class DiabloElixirAlerter( commands.Cog ):
 
         if len( channel.members ) == 0 or all( m.bot for m in channel.members ):
             if self.next_alert_time[ channel_id ] != datetime.min:
-                LOG.debug( f'Empty channel detected: {channel_id}' )
+                LOG.info( f'Empty channel detected: {channel_id}' )
                 self.next_alert_time[ channel_id ] = datetime.min
             return
 
-        if self.next_alert_time[ channel_id ] == datetime.min:
+        if new_member or self.next_alert_time[ channel_id ] == datetime.min:
             LOG.info( f'First member join detected: {channel_id}' )
             self.next_alert_time[ channel_id ] = datetime.now() + AFTER_JOIN_ALERT_DELAY
             return
