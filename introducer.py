@@ -7,12 +7,9 @@ import discord
 
 from discord.ext import commands
 
-from consts import SOUNDS_DIR
+from consts import INTRO_SOUNDS_DIR, WELCOME_SOUNDS_DIR
 from tts import TTS
 from utils import get_channel_voice_client, join_voice_chat
-
-INTROS_DIR = SOUNDS_DIR / 'intros'
-WELCOMES_DIR = SOUNDS_DIR / 'welcomes'
 
 INTRO_DELAY = 0.5
 
@@ -42,10 +39,10 @@ class IntroducerCog( commands.Cog ):
     async def _get_intro_sound( self, member: discord.Member, welcome=False ) -> Path:
         if welcome:
             text_format = 'Welcome {name}'
-            sounds_dir = WELCOMES_DIR
+            sounds_dir = WELCOME_SOUNDS_DIR
         else:
             text_format = '{name} has joined the chat'
-            sounds_dir = INTROS_DIR
+            sounds_dir = INTRO_SOUNDS_DIR
 
         return await self._get_member_sound( text_format, member, sounds_dir, 'default.mp3' )
 

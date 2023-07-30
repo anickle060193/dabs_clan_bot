@@ -2,13 +2,12 @@ import asyncio
 import random
 
 from datetime import datetime, timedelta
-from pathlib import Path
 
 import discord
 
 from discord.ext import tasks, commands
 
-from consts import SOUNDS_DIR
+from consts import ELIXIR_ALERT_SOUNDS_DIR
 from utils import join_voice_chat
 
 DIABLO_VOICE_CHANNEL_IDS = [
@@ -18,8 +17,6 @@ DIABLO_VOICE_CHANNEL_IDS = [
 
 AFTER_JOIN_ALERT_DELAY = timedelta( minutes=5 )
 ALERT_INTERVAL = timedelta( minutes=15 )
-
-ELIXIR_ALERT_SOUNDS_DIR = SOUNDS_DIR / 'elixir_alerts'
 
 class DiabloElixirAlerter( commands.Cog ):
     def __init__( self, bot: commands.Bot ) -> None:

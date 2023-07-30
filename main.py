@@ -3,20 +3,16 @@ import logging
 import logging.handlers
 
 from datetime import datetime
-from pathlib import Path
 
 import discord
 
 from discord.ext import commands
 
+from consts import LOGS_DIR
 from diablo_elixir_alerter import DiabloElixirAlerter
 from introducer import IntroducerCog
 from secret import TOKEN
 from tts import TTS
-
-THIS_DIR = Path( __file__ ).parent
-
-LOGS_DIR = THIS_DIR / 'logs'
 
 discord.utils.setup_logging()
 
