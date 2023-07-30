@@ -29,8 +29,9 @@ class IntroducerCog( commands.Cog ):
         tts_text = tts_text_format.format( name=member_name )
 
         try:
-            audio_content = await self.tts.generate_tts( tts_text, language_code='en-US', voice_name='en-US-Wavenet-F' )
+            audio_content = await self.tts.generate_tts( tts_text, language_code='en-US', voice_name='en-US-Neural2-C' )
             sound_mp3_path.write_bytes( audio_content )
+            return sound_mp3_path
         except Exception as ex:
             print( f'Failed to generate TTS for "{tts_text}":', ex )
 
