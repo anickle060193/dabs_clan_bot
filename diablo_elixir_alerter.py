@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import random
 
 from datetime import datetime, timedelta
@@ -9,6 +10,8 @@ from discord.ext import tasks, commands
 
 from consts import ELIXIR_ALERT_SOUNDS_DIR
 from utils import join_voice_chat
+
+LOG = logging.getLogger( __name__ )
 
 DIABLO_VOICE_CHANNEL_IDS = [
     1088975077179150479, # DABS Clan - diablo4-party-channel
@@ -52,40 +55,40 @@ class DiabloElixirAlerter( commands.Cog ):
         try:
             await self._perform_elixir_alert( channel_id )
         except Exception as ex:
-            print( 'Failed to perform elixir alert for channel:', channel_id, ex )
+            LOG.error( f'Failed to perform elixir alert for channel: {channel_id}', exc_info=ex )
 
     async def _perform_elixir_alert( self, channel_id: int ):
-        print( 'Performing elixir alert:', channel_id )
+        LOG.debug( f'Performing elixir alert: {channel_id}' )
 
         if channel_id not in self.next_alert_time:
-            print( 'Unknown channel ID:', channel_id )
+            LOG.warning( f'Unknown channel ID: {channel_id}' )
             return
 
         channel = self.bot.get_channel( channel_id )
         if not isinstance( channel, ( discord.VoiceChannel, discord.StageChannel ) ):
             if channel:
-                print( 'Channel is not a voice channel:', channel )
+                LOG.warning( f'Channel is not a voice channel: {channel_id}' )
             else:
-                print( 'Could not find voice channel:', channel_id )
+                LOG.warning( f'Could not find voice channel: {channel_id}' )
             return
 
         if len( channel.members ) == 0 or all( m.bot for m in channel.members ):
             if self.next_alert_time[ channel_id ] != datetime.min:
-                print( 'Empty channel detected:', channel_id )
+                LOG.debug( f'Empty channel detected: {channel_id}' )
                 self.next_alert_time[ channel_id ] = datetime.min
             return
 
         if self.next_alert_time[ channel_id ] == datetime.min:
-            print( 'First member join detected:', channel_id )
+            LOG.info( f'First member join detected: {channel_id}' )
             self.next_alert_time[ channel_id ] = datetime.now() + AFTER_JOIN_ALERT_DELAY
             return
 
         now = datetime.now()
         if self.next_alert_time[ channel_id ] > now:
-            print( 'Waiting for alert time:', channel_id, ( self.next_alert_time[ channel_id ] - now ), 'remaining' )
+            LOG.debug( f'Waiting for alert time: {channel_id} - {( self.next_alert_time[ channel_id ] - now )} remaining' )
             return
 
-        print( 'Playing elixir alert:', channel_id )
+        LOG.info( f'Playing elixir alert: {channel_id}' )
         self.next_alert_time[ channel_id ] = now + ALERT_INTERVAL
 
         voice_client = await join_voice_chat( self.bot, channel )
@@ -94,7 +97,7 @@ class DiabloElixirAlerter( commands.Cog ):
 
         def after_play( ex: Exception | None ):
             if ex:
-                print( 'Failed to play elixir alert:', alert_sound_mp3_path, ex )
+                LOG.error( f'Failed to play elixir alert: {channel_id} - {alert_sound_mp3_path}', exc_info=ex )
 
         source = discord.PCMVolumeTransformer( discord.FFmpegPCMAudio( source=str( alert_sound_mp3_path ) ) )
         voice_client.play( source, after=after_play )

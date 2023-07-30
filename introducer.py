@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import re
 
 from pathlib import Path
@@ -10,6 +11,8 @@ from discord.ext import commands
 from consts import INTRO_SOUNDS_DIR, WELCOME_SOUNDS_DIR
 from tts import TTS
 from utils import get_channel_voice_client, join_voice_chat
+
+LOG = logging.getLogger( __name__ )
 
 INTRO_DELAY = 0.5
 
@@ -29,11 +32,12 @@ class IntroducerCog( commands.Cog ):
         tts_text = tts_text_format.format( name=member_name )
 
         try:
+            LOG.debug( f'Generating sound for member {member.name}: "{tts_text_format}"' )
             audio_content = await self.tts.generate_tts( tts_text, language_code='en-US', voice_name='en-US-Neural2-C' )
             sound_mp3_path.write_bytes( audio_content )
             return sound_mp3_path
         except Exception as ex:
-            print( f'Failed to generate TTS for "{tts_text}":', ex )
+            LOG.error( f'Failed to generate TTS for "{tts_text}":', exc_info=ex )
 
         return sounds_path / default_sound
 
@@ -59,10 +63,11 @@ class IntroducerCog( commands.Cog ):
                 if all( m.bot for m in before.channel.members ):
                     voice_client = get_channel_voice_client( self.bot, before.channel )
                     if voice_client:
+                        LOG.info( f'Empty voice chat detected, disconnecting' )
                         await voice_client.disconnect()
             return
 
-        print( member.name, f'(ID: {member.id})', 'joined', after.channel.name, f'(ID: {after.channel.id})' )
+        LOG.info( f'{member.name} (ID: {member.id}) joined {after.channel.name} (ID: {after.channel.id})' )
 
         welcome = all( m.bot or m == member for m in after.channel.members )
 
@@ -78,7 +83,7 @@ class IntroducerCog( commands.Cog ):
 
         def after_play( ex: Exception | None ):
             if ex:
-                print( 'Failed to play intro:', sound_mp3_path, ex )
+                LOG.error( f'Failed to intro for {member.name}: {sound_mp3_path}', exc_info=ex )
 
         source = discord.PCMVolumeTransformer( discord.FFmpegPCMAudio( source=str( sound_mp3_path ) ) )
         voice_client.play( source, after=after_play )

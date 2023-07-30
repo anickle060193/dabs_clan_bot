@@ -1,4 +1,5 @@
 import asyncio
+import logging
 
 import discord
 
@@ -9,6 +10,8 @@ from introducer import IntroducerCog
 from logs import setup_logging
 from secret import TOKEN
 from tts import TTS
+
+LOG = logging.getLogger( __name__ )
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -21,8 +24,7 @@ bot = commands.Bot(
 
 @bot.event
 async def on_ready():
-    print( f'Logged in as {bot.user} (ID: {bot.user.id if bot.user else ""})' )
-    print( '-' * 100 )
+    LOG.info( f'READY: Logged in as {bot.user} (ID: {bot.user.id if bot.user else ""})' )
 
 async def main():
     setup_logging()
