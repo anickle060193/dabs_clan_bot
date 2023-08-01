@@ -9,15 +9,10 @@ import discord
 
 from discord.ext import tasks, commands
 
-from consts import ELIXIR_ALERT_SOUNDS_DIR
-from utils import join_voice_chat
+from constants import DIABLO_VOICE_CHANNEL_IDS, ELIXIR_ALERT_SOUNDS_DIR
+from utils import join_voice_chat, play_voice_channel_audio
 
 LOG = logging.getLogger( __name__ )
-
-DIABLO_VOICE_CHANNEL_IDS = [
-    1088975077179150479, # DABS Clan - diablo4-party-channel
-    1128140152418611221, # anickle060193's Test Server - Other Channel
-]
 
 AFTER_JOIN_ALERT_DELAY = timedelta( minutes=1 )
 ALERT_INTERVAL = timedelta( minutes=15 )
@@ -114,9 +109,8 @@ class DiabloElixirAlerter( commands.Cog ):
 
         alert_sound_mp3_path = random.choice( list( ELIXIR_ALERT_SOUNDS_DIR.glob( '*.mp3' ) ) )
 
-        def after_play( ex: Exception | None ):
-            if ex:
-                LOG.error( f'Failed to play elixir alert: {channel_id} - {alert_sound_mp3_path}', exc_info=ex )
-
-        source = discord.PCMVolumeTransformer( discord.FFmpegPCMAudio( source=str( alert_sound_mp3_path ) ) )
-        voice_client.play( source, after=after_play )
+        try:
+            source = discord.PCMVolumeTransformer( discord.FFmpegPCMAudio( source=str( alert_sound_mp3_path ) ) )
+            await play_voice_channel_audio( voice_client, source )
+        except Exception as ex:
+            LOG.error( f'Failed to play elixir alert: {channel_id} - {alert_sound_mp3_path}', exc_info=ex )

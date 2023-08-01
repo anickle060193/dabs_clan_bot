@@ -8,9 +8,9 @@ import discord
 
 from discord.ext import commands
 
-from consts import INTRO_SOUNDS_DIR, WELCOME_SOUNDS_DIR
+from constants import INTRO_SOUNDS_DIR, WELCOME_SOUNDS_DIR
 from tts import TTS
-from utils import get_channel_voice_client, join_voice_chat
+from utils import get_channel_voice_client, join_voice_chat, play_voice_channel_audio
 
 LOG = logging.getLogger( __name__ )
 
@@ -81,9 +81,8 @@ class IntroducerCog( commands.Cog ):
 
         await intro_delayer
 
-        def after_play( ex: Exception | None ):
-            if ex:
-                LOG.error( f'Failed to intro for {member.name}: {sound_mp3_path}', exc_info=ex )
-
-        source = discord.PCMVolumeTransformer( discord.FFmpegPCMAudio( source=str( sound_mp3_path ) ) )
-        voice_client.play( source, after=after_play )
+        try:
+            source = discord.PCMVolumeTransformer( discord.FFmpegPCMAudio( source=str( sound_mp3_path ) ) )
+            await play_voice_channel_audio( voice_client, source )
+        except Exception as ex:
+            LOG.error( f'Failed to intro for {member.name}: {sound_mp3_path}', exc_info=ex )

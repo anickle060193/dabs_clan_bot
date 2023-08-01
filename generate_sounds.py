@@ -4,7 +4,7 @@ import asyncio
 from pathlib import Path
 from typing import List, NamedTuple
 
-from consts import ELIXIR_ALERT_SOUNDS_DIR, INTRO_SOUNDS_DIR, WELCOME_SOUNDS_DIR
+from constants import ELIXIR_ALERT_SOUNDS_DIR, INTRO_SOUNDS_DIR, WELCOME_SOUNDS_DIR
 from tts import TTS
 
 class TtsConfig( NamedTuple ):

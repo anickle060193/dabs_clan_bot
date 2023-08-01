@@ -4,7 +4,7 @@ from datetime import datetime
 
 import discord
 
-from consts import LOGS_DIR
+from constants import LOGS_DIR
 
 def setup_logging():
     stream_handler = logging.StreamHandler()

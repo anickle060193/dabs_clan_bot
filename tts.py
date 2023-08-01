@@ -4,9 +4,12 @@ class TTS:
     def __init__( self ) -> None:
         self.gtts_client = gtts.TextToSpeechAsyncClient()
 
-    async def generate_tts( self, text: str, *, language_code: str = 'en-US', voice_name: str = 'en-US-Neural2-C', pitch: float | None = None, speed: float | None = None ) -> bytes:
+    async def generate_tts( self, text: str, *, ssml: bool = False, language_code: str = 'en-US', voice_name: str = 'en-US-Neural2-C', pitch: float | None = None, speed: float | None = None ) -> bytes:
         tts_input = gtts.SynthesisInput()
-        tts_input.text = text
+        if ssml:
+            tts_input.ssml = text
+        else:
+            tts_input.text = text
 
         audio_config = gtts.AudioConfig()
         audio_config.audio_encoding = gtts.AudioEncoding.MP3

@@ -6,6 +6,7 @@ import discord
 from discord.ext import commands
 
 from diablo_elixir_alerter import DiabloElixirAlerter
+from diablo_events_alerter import DiabloEventsAlerter
 from introducer import IntroducerCog
 from logs import setup_logging
 from secret import TOKEN
@@ -34,6 +35,7 @@ async def main():
     async with bot:
         await bot.add_cog( IntroducerCog( bot, tts ) )
         await bot.add_cog( DiabloElixirAlerter( bot ) )
+        await bot.add_cog( DiabloEventsAlerter( bot, tts ) )
         await bot.start( TOKEN )
 
 if __name__ == '__main__':

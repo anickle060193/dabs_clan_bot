@@ -1,3 +1,5 @@
+import asyncio
+
 import discord
 
 from discord.ext import commands
@@ -17,3 +19,19 @@ async def join_voice_chat( bot: commands.Bot, channel: discord.VoiceChannel | di
             await voice_client.channel.guild.change_voice_state( channel=voice_client.channel, self_mute=False, self_deaf=True )
 
         return voice_client
+
+async def play_voice_channel_audio( voice_client: discord.VoiceClient, source: discord.AudioSource ):
+        while voice_client.is_playing():
+             await asyncio.sleep( 1.0 )
+
+        future = asyncio.get_running_loop().create_future()
+
+        def after_play( ex: Exception | None ):
+            if ex:
+                future.set_exception( ex )
+            else:
+                future.set_result( None )
+
+        voice_client.play( source, after=after_play )
+
+        await future
