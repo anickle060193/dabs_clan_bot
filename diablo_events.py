@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import Dict
 
 import aiohttp
 
@@ -34,6 +35,14 @@ class DiabloEvents:
     boss: DiabloBossEvent
     legion: DiabloLegionEvent
     helltide: DiabloHelltideEvent
+
+HELLTIDE_ZONE_NAMES: Dict[ str, str ] = {
+  'kehj': 'Kehjistan',
+  'hawe': 'Hawezar',
+  'scos': 'Scosglen',
+  'frac': 'Fractured Peaks',
+  'step': 'Dry Steppes',
+}
 
 EVENTS_SCHEMA = {
     'type': 'object',
