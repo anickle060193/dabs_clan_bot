@@ -10,7 +10,7 @@ import discord
 from discord.ext import tasks, commands
 
 from constants import DIABLO_VOICE_CHANNEL_IDS
-from diablo_events import HELLTIDE_ZONE_NAMES, DiabloEvents, get_diablo_events
+from diablo_events import DiabloEvents, get_diablo_events
 from tts import TTS
 from utils import join_voice_chat, play_voice_channel_audio
 
@@ -176,12 +176,11 @@ class DiabloEventsAlerter( commands.Cog ):
             self.last_legion_alert = now
             await self._perform_event_alerts( f'Legions are gathering in {events.legion.territory} {events.legion.zone} in', legion_time - now )
 
-        helltide_time = datetime.utcfromtimestamp( events.helltide.timestamp )
+        helltide_time = self._get_event_time( now, events.helltide.timestamp, events.helltide.timestamp + ( 2 * 60 + 15 ) * 60 )
         if self._should_alert_event( now, helltide_time, self.last_helltide_alert, HELLTIDE_ALERT_INTERVALS ):
             LOG.info( f'Helltide event alert interval passed, performing event alert for {events.helltide} at {helltide_time}' )
             self.last_helltide_alert = now
-            zone = HELLTIDE_ZONE_NAMES.get( events.legion.zone, 'Sanctuary' )
-            await self._perform_event_alerts( f'The Helltide will rise in {zone} in', helltide_time - now )
+            await self._perform_event_alerts( f'The Helltide will rise in', helltide_time - now )
 
         self.last_events = events
 
