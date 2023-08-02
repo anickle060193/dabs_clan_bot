@@ -17,23 +17,21 @@ from utils import join_voice_chat, play_voice_channel_audio
 LOG = logging.getLogger( __name__ )
 
 BOSS_ALERT_INTERVALS = [
-    timedelta( days=1 ),
     timedelta( minutes=60 ),
     timedelta( minutes=30 ),
     timedelta( minutes=15 ),
     timedelta( minutes=5 ),
+    timedelta( minutes=2 ),
     timedelta( minutes=1 ),
 ]
 
 LEGION_ALERT_INTERVALS = [
-    timedelta( days=1 ),
-    timedelta( minutes=10 ),
-    timedelta( minutes=5 ),
-    timedelta( minutes=1 ),
+    timedelta( minutes=4, seconds=30 ),
+    timedelta( minutes=2 ),
 ]
 
 HELLTIDE_ALERT_INTERVALS = [
-    timedelta( days=1 ),
+    timedelta( minutes=15 ),
     timedelta( minutes=5 ),
     timedelta( minutes=1 ),
 ]
@@ -149,6 +147,7 @@ class DiabloEventsAlerter( commands.Cog ):
             LOG.warning( f'Failed to retrieve Diablo events', exc_info=ex )
             return
 
+        force_alert = self.last_events is None
         now = datetime.utcnow()
 
         if self.last_events:
@@ -165,19 +164,19 @@ class DiabloEventsAlerter( commands.Cog ):
                 self.last_helltide_alert = datetime.min
 
         boss_time = self._get_event_time( now, events.boss.timestamp, events.boss.expected )
-        if self._should_alert_event( now, boss_time, self.last_boss_alert, BOSS_ALERT_INTERVALS ):
+        if force_alert or self._should_alert_event( now, boss_time, self.last_boss_alert, BOSS_ALERT_INTERVALS ):
             LOG.info( f'Boss event alert interval passed, performing event alert for {events.boss} at {boss_time}' )
             self.last_boss_alert = now
             await self._perform_event_alerts( f'{events.boss.expectedName} spawning in {events.boss.territory} {events.boss.zone} in', boss_time - now )
 
         legion_time = self._get_event_time( now, events.legion.timestamp, events.legion.expected )
-        if self._should_alert_event( now, legion_time, self.last_legion_alert, LEGION_ALERT_INTERVALS ):
+        if force_alert or self._should_alert_event( now, legion_time, self.last_legion_alert, LEGION_ALERT_INTERVALS ):
             LOG.info( f'Legion event alert interval passed, performing event alert for {events.legion} at {legion_time}' )
             self.last_legion_alert = now
             await self._perform_event_alerts( f'Legions are gathering in {events.legion.territory} {events.legion.zone} in', legion_time - now )
 
         helltide_time = self._get_event_time( now, events.helltide.timestamp, events.helltide.timestamp + ( 2 * 60 + 15 ) * 60 )
-        if self._should_alert_event( now, helltide_time, self.last_helltide_alert, HELLTIDE_ALERT_INTERVALS ):
+        if force_alert or self._should_alert_event( now, helltide_time, self.last_helltide_alert, HELLTIDE_ALERT_INTERVALS ):
             LOG.info( f'Helltide event alert interval passed, performing event alert for {events.helltide} at {helltide_time}' )
             self.last_helltide_alert = now
             await self._perform_event_alerts( f'The Helltide will rise in', helltide_time - now )
