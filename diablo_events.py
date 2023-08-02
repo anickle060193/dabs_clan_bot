@@ -100,8 +100,13 @@ async def get_diablo_events() -> DiabloEvents:
 if __name__ == '__main__':
     import asyncio
 
+    from datetime import datetime
+
     async def main():
         events = await get_diablo_events()
         print( events )
+        now = datetime.utcnow()
+        print( 'Next Boss:', datetime.utcfromtimestamp( events.boss.timestamp ) - now, datetime.utcfromtimestamp( events.boss.expected ) - now )
+        print( 'Next Legion:', datetime.utcfromtimestamp( events.legion.timestamp ) - now, datetime.utcfromtimestamp( events.legion.expected ) - now )
 
     asyncio.run( main() )

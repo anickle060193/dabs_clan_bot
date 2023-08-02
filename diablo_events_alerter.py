@@ -118,6 +118,13 @@ class DiabloEventsAlerter( commands.Cog ):
 
         return False
 
+    def _get_event_time( self, now: datetime, timestamp: int, expected: int ) -> datetime:
+        timestamp_date = datetime.utcfromtimestamp( timestamp )
+        if timestamp_date < now:
+            return datetime.utcfromtimestamp( expected )
+        else:
+            return timestamp_date
+
     async def cog_unload( self ):
         self.events_checker.cancel()
 
@@ -135,15 +142,15 @@ class DiabloEventsAlerter( commands.Cog ):
             LOG.warning( f'Failed to retrieve Diablo events', exc_info=ex )
             return
 
-        now = datetime.now()
+        now = datetime.utcnow()
 
-        boss_time = datetime.fromtimestamp( events.boss.expected )
+        boss_time = self._get_event_time( now, events.boss.timestamp, events.boss.expected )
         if self._should_alert_event( now, boss_time, self.last_boss_alert, BOSS_ALERT_INTERVALS ):
             LOG.info( f'Boss event alert interval passed, performing event alert for {events.boss} at {boss_time}' )
             self.last_boss_alert = now
             await self._perform_event_alerts( f'{events.boss.expectedName} spawning in {events.boss.territory} {events.boss.zone} in', boss_time - now )
 
-        legion_time = datetime.fromtimestamp( events.legion.expected )
+        legion_time = self._get_event_time( now, events.legion.timestamp, events.legion.expected )
         if self._should_alert_event( now, legion_time, self.last_legion_alert, LEGION_ALERT_INTERVALS ):
             LOG.info( f'Legion event alert interval passed, performing event alert for {events.legion} at {legion_time}' )
             self.last_legion_alert = now
