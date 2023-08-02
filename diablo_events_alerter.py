@@ -144,6 +144,15 @@ class DiabloEventsAlerter( commands.Cog ):
 
         now = datetime.utcnow()
 
+        if self.last_events:
+            if events.boss.timestamp != self.last_events.boss.timestamp or events.boss.expected != self.last_events.boss.expected:
+                LOG.info( f'Resetting last boss alert time: {self.last_events.boss} -> {events.boss}' )
+                self.last_boss_alert = datetime.min
+
+            if events.legion.timestamp != self.last_events.legion.timestamp or events.legion.expected != self.last_events.legion.expected:
+                LOG.info( f'Resetting last legion alert time: {self.last_events.legion} -> {events.legion}' )
+                self.last_legion_alert = datetime.min
+
         boss_time = self._get_event_time( now, events.boss.timestamp, events.boss.expected )
         if self._should_alert_event( now, boss_time, self.last_boss_alert, BOSS_ALERT_INTERVALS ):
             LOG.info( f'Boss event alert interval passed, performing event alert for {events.boss} at {boss_time}' )
