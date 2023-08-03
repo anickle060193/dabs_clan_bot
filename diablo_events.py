@@ -109,14 +109,14 @@ async def get_diablo_events() -> DiabloEvents:
 if __name__ == '__main__':
     import asyncio
 
-    from datetime import datetime
+    from datetime import datetime, timezone
 
     async def main():
         events = await get_diablo_events()
         print( events )
-        now = datetime.utcnow()
-        print( 'Next Boss:', datetime.utcfromtimestamp( events.boss.timestamp ) - now, '/', datetime.utcfromtimestamp( events.boss.expected ) - now )
-        print( 'Next Legion:', datetime.utcfromtimestamp( events.legion.timestamp ) - now, '/', datetime.utcfromtimestamp( events.legion.expected ) - now )
-        print( 'Next Helltide:', datetime.utcfromtimestamp( events.helltide.timestamp ) - now, '/', datetime.utcfromtimestamp( events.helltide.timestamp + ( 2 * 60 + 15 ) * 60 ) - now )
+        now = datetime.now( tz=timezone.utc )
+        print( 'Next Boss:', datetime.fromtimestamp( events.boss.timestamp, tz=timezone.utc ) - now, '/', datetime.fromtimestamp( events.boss.expected, tz=timezone.utc ) - now )
+        print( 'Next Legion:', datetime.fromtimestamp( events.legion.timestamp, tz=timezone.utc ) - now, '/', datetime.fromtimestamp( events.legion.expected, tz=timezone.utc ) - now )
+        print( 'Next Helltide:', datetime.fromtimestamp( events.helltide.timestamp, tz=timezone.utc ) - now, '/', datetime.fromtimestamp( events.helltide.timestamp + ( 2 * 60 + 15 ) * 60, tz=timezone.utc ) - now )
 
     asyncio.run( main() )

@@ -2,8 +2,9 @@ import asyncio
 import io
 import logging
 
-from datetime import datetime, timedelta
-from typing import List, Set
+from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
+from typing import Sequence
 
 import discord
 
@@ -26,7 +27,7 @@ BOSS_ALERT_INTERVALS = [
 ]
 
 LEGION_ALERT_INTERVALS = [
-    timedelta( minutes=3, seconds=30 ),
+    timedelta( minutes=3, seconds=45 ),
     timedelta( minutes=1 ),
 ]
 
@@ -34,23 +35,96 @@ HELLTIDE_ALERT_INTERVALS = [
     timedelta( minutes=1 ),
 ]
 
+@dataclass
+class DiabloEventAlert:
+    text: str
+    event_time: datetime
+    alert_time: datetime
+
+def get_event_time( now: datetime, timestamp: int, expected: int ) -> datetime:
+    timestamp_date = datetime.fromtimestamp( timestamp, timezone.utc )
+    if timestamp_date < now:
+        return datetime.fromtimestamp( expected, tz=timezone.utc )
+    else:
+        return timestamp_date
+
+def diablo_events_to_alerts( now: datetime, last_alert_time: datetime, events: DiabloEvents ) -> list[ DiabloEventAlert ]:
+    alerts: list[ DiabloEventAlert ] = []
+
+    boss_time = get_event_time( now, events.boss.timestamp, events.boss.expected )
+    boss_text = f'{events.boss.expectedName} spawning in {events.boss.territory} {events.boss.zone} in'
+
+    legion_time = get_event_time( now, events.legion.timestamp, events.legion.expected )
+    legion_text = f'Legions are gathering in {events.legion.territory} {events.legion.zone} in'
+
+    helltide_time = get_event_time( now, events.helltide.timestamp, events.helltide.timestamp + ( 2 * 60 + 15 ) * 60 )
+    helltide_zone = HELLTIDE_ZONE_NAMES.get( events.helltide.zone, 'Sanctuary' )
+    helltide_text = f'The Helltide will rise in {helltide_zone} in'
+
+    alert_configs: Sequence[ tuple[ datetime, str, list[ timedelta ] ] ] = (
+        ( boss_time, boss_text, BOSS_ALERT_INTERVALS ),
+        ( legion_time, legion_text, LEGION_ALERT_INTERVALS ),
+        ( helltide_time, helltide_text, HELLTIDE_ALERT_INTERVALS ),
+    )
+
+    for event_time, event_text, alert_intervals in alert_configs:
+        for interval in alert_intervals:
+            alert_time = event_time - interval
+            if alert_time < last_alert_time:
+                continue
+
+            alerts.append( DiabloEventAlert(
+                text=event_text,
+                event_time=event_time,
+                alert_time=event_time - interval,
+            ) )
+            break
+
+    sorted_alerts = sorted( alerts, key=lambda a: a.alert_time )
+
+    return sorted_alerts
+
+def format_event_time_till( time_till_event: timedelta ) -> str:
+    time: list[ str ] = []
+
+    total_seconds = time_till_event.total_seconds() - 5
+
+    if total_seconds <= 60:
+        return 'less than 1 minute'
+
+    hours = int( total_seconds / 60 / 60 )
+    total_seconds -= hours * 60 * 60
+    if hours != 0:
+        time.append( f'{hours} hours' )
+
+    minutes = int( total_seconds / 60 )
+    total_seconds -= minutes * 60
+    if minutes != 0:
+        time.append( f'{minutes} minutes' )
+
+    if hours == 0 and minutes < 30:
+        seconds = int( total_seconds )
+        if seconds != 0:
+            time.append( f'{seconds} seconds' )
+
+    return ' '.join( time )
+
 class DiabloEventsAlerter( commands.Cog ):
     def __init__( self, bot: commands.Bot, tts: TTS ) -> None:
         self.bot = bot
         self.tts = tts
 
-        self.diablo_voice_channel_ids: Set[ int ] = set()
+        self.diablo_voice_channel_ids: set[ int ] = set()
 
         self.events: DiabloEvents | None = None
+        self.alerts: list[ DiabloEventAlert ] | None = None
+        self.last_alert_time: datetime = datetime.min.replace( tzinfo=timezone.utc )
+        self.first_alert = True
+
         self.events_retrieved = asyncio.Event()
 
-        self.last_events: DiabloEvents | None = None
-        self.last_boss_alert = datetime.min
-        self.last_legion_alert = datetime.min
-        self.last_helltide_alert = datetime.min
-
         self.events_retriever.start()
-        self.events_checker.start()
+        self.events_alerter.start()
 
     def _check_guild_for_diablo_voice_channel( self, guild: discord.Guild ):
         for channel_id in DIABLO_VOICE_CHANNEL_IDS:
@@ -84,57 +158,17 @@ class DiabloEventsAlerter( commands.Cog ):
         if len( channels ) == 0:
             return
 
-        time: List[ str ] = []
-
-        total_seconds = time_till_event.total_seconds() - 5
-
-        if total_seconds <= 60:
-            time_text = 'less than 1 minute'
-        else:
-            hours = int( total_seconds / 60 / 60 )
-            total_seconds -= hours * 60 * 60
-            if hours != 0:
-                time.append( f'{hours} hours' )
-
-            minutes = int( total_seconds / 60 )
-            total_seconds -= minutes * 60
-            if minutes != 0:
-                time.append( f'{minutes} minutes' )
-
-            if hours == 0 and minutes < 30:
-                seconds = int( total_seconds )
-                if seconds != 0:
-                    time.append( f'{seconds} seconds' )
-
-            time_text = ' '.join( time )
-
-        time_till_event_text = f'{event_prefix} {time_text}'
+        time_till_text = format_event_time_till( time_till_event )
+        time_till_event_text = f'{event_prefix} {time_till_text}'
 
         LOG.info( f'Event alert text: {time_till_event_text}' )
         audio_content = await self.tts.generate_tts( time_till_event_text, language_code='en-US', voice_name='en-US-Neural2-C' )
 
         await asyncio.gather( *( self._perform_event_alert_for_channel( c, audio_content ) for c in channels ), return_exceptions=True )
 
-    def _should_alert_event( self, now: datetime, event_time: datetime, last_alert_time: datetime, intervals: List[ timedelta ] ) -> bool:
-        if now >= event_time:
-            return False
-
-        for interval in sorted( intervals ):
-            alert_time = event_time - interval
-            if now >= alert_time and last_alert_time < alert_time:
-                return True
-
-        return False
-
-    def _get_event_time( self, now: datetime, timestamp: int, expected: int ) -> datetime:
-        timestamp_date = datetime.utcfromtimestamp( timestamp )
-        if timestamp_date < now:
-            return datetime.utcfromtimestamp( expected )
-        else:
-            return timestamp_date
-
     async def cog_unload( self ):
-        self.events_checker.cancel()
+        self.events_retriever.cancel()
+        self.events_alerter.cancel()
 
     @commands.Cog.listener()
     async def on_guild_join( self, guild: discord.Guild ):
@@ -145,63 +179,39 @@ class DiabloEventsAlerter( commands.Cog ):
         for guild in self.bot.guilds:
             self._check_guild_for_diablo_voice_channel( guild )
 
-    @tasks.loop( seconds=15 )
-    async def events_checker( self ):
+    @tasks.loop( seconds=10 )
+    async def events_alerter( self ):
         if not self.events:
+            LOG.warning( 'No Diablo event set' )
             return
 
-        force_alert = self.last_events is None
-        now = datetime.utcnow()
+        now = datetime.now( tz=timezone.utc )
 
-        if self.last_events:
-            if self.events.boss.timestamp != self.last_events.boss.timestamp or self.events.boss.expected != self.last_events.boss.expected:
-                LOG.info( f'Resetting last boss alert time: {self.last_events.boss} -> {self.events.boss}' )
-                self.last_boss_alert = datetime.min
+        alerts = diablo_events_to_alerts( now, self.last_alert_time, self.events )
 
-            if self.events.legion.timestamp != self.last_events.legion.timestamp or self.events.legion.expected != self.last_events.legion.expected:
-                LOG.info( f'Resetting last legion alert time: {self.last_events.legion} -> {self.events.legion}' )
-                self.last_legion_alert = datetime.min
+        for alert in alerts:
+            if self.first_alert or alert.alert_time <= now:
+                await self._perform_event_alerts( alert.text, alert.event_time - now )
 
-            if self.events.helltide.timestamp != self.last_events.helltide.timestamp:
-                LOG.info( f'Resetting last helltide alert time: {self.last_events.helltide} -> {self.events.helltide}' )
-                self.last_helltide_alert = datetime.min
+        self.last_alert_time = now
+        self.first_alert = False
 
-        boss_time = self._get_event_time( now, self.events.boss.timestamp, self.events.boss.expected )
-        if force_alert or self._should_alert_event( now, boss_time, self.last_boss_alert, BOSS_ALERT_INTERVALS ):
-            LOG.info( f'Boss event alert interval passed, performing event alert for {self.events.boss} at {boss_time}' )
-            self.last_boss_alert = now
-            await self._perform_event_alerts( f'{self.events.boss.expectedName} spawning in {self.events.boss.territory} {self.events.boss.zone} in', boss_time - now )
-
-        legion_time = self._get_event_time( now, self.events.legion.timestamp, self.events.legion.expected )
-        if force_alert or self._should_alert_event( now, legion_time, self.last_legion_alert, LEGION_ALERT_INTERVALS ):
-            LOG.info( f'Legion event alert interval passed, performing event alert for {self.events.legion} at {legion_time}' )
-            self.last_legion_alert = now
-            await self._perform_event_alerts( f'Legions are gathering in {self.events.legion.territory} {self.events.legion.zone} in', legion_time - now )
-
-        helltide_time = self._get_event_time( now, self.events.helltide.timestamp, self.events.helltide.timestamp + ( 2 * 60 + 15 ) * 60 )
-        if force_alert or self._should_alert_event( now, helltide_time, self.last_helltide_alert, HELLTIDE_ALERT_INTERVALS ):
-            LOG.info( f'Helltide event alert interval passed, performing event alert for {self.events.helltide} at {helltide_time}' )
-            self.last_helltide_alert = now
-            zone = HELLTIDE_ZONE_NAMES.get( self.events.helltide.zone, 'Sanctuary' )
-            await self._perform_event_alerts( f'The Helltide will rise in {zone} in', helltide_time - now )
-
-        self.last_events = self.events
-
-    @events_checker.before_loop
-    async def before_events_checker( self ):
+    @events_alerter.before_loop
+    async def before_events_alerter( self ):
         await self.bot.wait_until_ready()
 
         await self.events_retrieved.wait()
 
     @tasks.loop( minutes=1 )
     async def events_retriever( self ):
+        LOG.info( 'Retrieving Diablo events' )
+
         try:
             events = await get_diablo_events()
             if events != self.events:
-                LOG.info( f'New Diablo events retrieved: {self.events} -> {events}' )
-
-            self.events = events
-            self.events_retrieved.set()
+                LOG.info( f'New Diablo events retrieved: {events}' )
+                self.events = events
+                self.events_retrieved.set()
         except Exception as ex:
             LOG.warning( f'Failed to retrieve Diablo events', exc_info=ex )
 
