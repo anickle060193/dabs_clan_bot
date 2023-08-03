@@ -10,7 +10,7 @@ import discord
 from discord.ext import tasks, commands
 
 from constants import DIABLO_VOICE_CHANNEL_IDS
-from diablo_events import DiabloEvents, get_diablo_events
+from diablo_events import HELLTIDE_ZONE_NAMES, DiabloEvents, get_diablo_events
 from tts import TTS
 from utils import join_voice_chat, play_voice_channel_audio
 
@@ -26,13 +26,11 @@ BOSS_ALERT_INTERVALS = [
 ]
 
 LEGION_ALERT_INTERVALS = [
-    timedelta( minutes=4, seconds=30 ),
-    timedelta( minutes=2 ),
+    timedelta( minutes=3, seconds=30 ),
+    timedelta( minutes=1 ),
 ]
 
 HELLTIDE_ALERT_INTERVALS = [
-    timedelta( minutes=15 ),
-    timedelta( minutes=5 ),
     timedelta( minutes=1 ),
 ]
 
@@ -43,11 +41,15 @@ class DiabloEventsAlerter( commands.Cog ):
 
         self.diablo_voice_channel_ids: Set[ int ] = set()
 
+        self.events: DiabloEvents | None = None
+        self.events_retrieved = asyncio.Event()
+
         self.last_events: DiabloEvents | None = None
         self.last_boss_alert = datetime.min
         self.last_legion_alert = datetime.min
         self.last_helltide_alert = datetime.min
 
+        self.events_retriever.start()
         self.events_checker.start()
 
     def _check_guild_for_diablo_voice_channel( self, guild: discord.Guild ):
@@ -84,7 +86,7 @@ class DiabloEventsAlerter( commands.Cog ):
 
         time: List[ str ] = []
 
-        total_seconds = time_till_event.total_seconds()
+        total_seconds = time_till_event.total_seconds() - 5
 
         if total_seconds <= 60:
             time_text = 'less than 1 minute'
@@ -99,9 +101,10 @@ class DiabloEventsAlerter( commands.Cog ):
             if minutes != 0:
                 time.append( f'{minutes} minutes' )
 
-            seconds = int( total_seconds )
-            if seconds != 0:
-                time.append( f'{seconds} seconds' )
+            if hours == 0 and minutes < 30:
+                seconds = int( total_seconds )
+                if seconds != 0:
+                    time.append( f'{seconds} seconds' )
 
             time_text = ' '.join( time )
 
@@ -137,55 +140,71 @@ class DiabloEventsAlerter( commands.Cog ):
     async def on_guild_join( self, guild: discord.Guild ):
         self._check_guild_for_diablo_voice_channel( guild )
 
-    @tasks.loop( minutes=1 )
-    async def events_checker( self ):
-        LOG.info( 'Checking for Diablo events' )
+    @commands.Cog.listener()
+    async def on_ready( self ):
+        for guild in self.bot.guilds:
+            self._check_guild_for_diablo_voice_channel( guild )
 
-        try:
-            events = await get_diablo_events()
-        except Exception as ex:
-            LOG.warning( f'Failed to retrieve Diablo events', exc_info=ex )
+    @tasks.loop( seconds=15 )
+    async def events_checker( self ):
+        if not self.events:
             return
 
         force_alert = self.last_events is None
         now = datetime.utcnow()
 
         if self.last_events:
-            if events.boss.timestamp != self.last_events.boss.timestamp or events.boss.expected != self.last_events.boss.expected:
-                LOG.info( f'Resetting last boss alert time: {self.last_events.boss} -> {events.boss}' )
+            if self.events.boss.timestamp != self.last_events.boss.timestamp or self.events.boss.expected != self.last_events.boss.expected:
+                LOG.info( f'Resetting last boss alert time: {self.last_events.boss} -> {self.events.boss}' )
                 self.last_boss_alert = datetime.min
 
-            if events.legion.timestamp != self.last_events.legion.timestamp or events.legion.expected != self.last_events.legion.expected:
-                LOG.info( f'Resetting last legion alert time: {self.last_events.legion} -> {events.legion}' )
+            if self.events.legion.timestamp != self.last_events.legion.timestamp or self.events.legion.expected != self.last_events.legion.expected:
+                LOG.info( f'Resetting last legion alert time: {self.last_events.legion} -> {self.events.legion}' )
                 self.last_legion_alert = datetime.min
 
-            if events.helltide.timestamp != self.last_events.helltide.timestamp:
-                LOG.info( f'Resetting last helltide alert time: {self.last_events.helltide} -> {events.helltide}' )
+            if self.events.helltide.timestamp != self.last_events.helltide.timestamp:
+                LOG.info( f'Resetting last helltide alert time: {self.last_events.helltide} -> {self.events.helltide}' )
                 self.last_helltide_alert = datetime.min
 
-        boss_time = self._get_event_time( now, events.boss.timestamp, events.boss.expected )
+        boss_time = self._get_event_time( now, self.events.boss.timestamp, self.events.boss.expected )
         if force_alert or self._should_alert_event( now, boss_time, self.last_boss_alert, BOSS_ALERT_INTERVALS ):
-            LOG.info( f'Boss event alert interval passed, performing event alert for {events.boss} at {boss_time}' )
+            LOG.info( f'Boss event alert interval passed, performing event alert for {self.events.boss} at {boss_time}' )
             self.last_boss_alert = now
-            await self._perform_event_alerts( f'{events.boss.expectedName} spawning in {events.boss.territory} {events.boss.zone} in', boss_time - now )
+            await self._perform_event_alerts( f'{self.events.boss.expectedName} spawning in {self.events.boss.territory} {self.events.boss.zone} in', boss_time - now )
 
-        legion_time = self._get_event_time( now, events.legion.timestamp, events.legion.expected )
+        legion_time = self._get_event_time( now, self.events.legion.timestamp, self.events.legion.expected )
         if force_alert or self._should_alert_event( now, legion_time, self.last_legion_alert, LEGION_ALERT_INTERVALS ):
-            LOG.info( f'Legion event alert interval passed, performing event alert for {events.legion} at {legion_time}' )
+            LOG.info( f'Legion event alert interval passed, performing event alert for {self.events.legion} at {legion_time}' )
             self.last_legion_alert = now
-            await self._perform_event_alerts( f'Legions are gathering in {events.legion.territory} {events.legion.zone} in', legion_time - now )
+            await self._perform_event_alerts( f'Legions are gathering in {self.events.legion.territory} {self.events.legion.zone} in', legion_time - now )
 
-        helltide_time = self._get_event_time( now, events.helltide.timestamp, events.helltide.timestamp + ( 2 * 60 + 15 ) * 60 )
+        helltide_time = self._get_event_time( now, self.events.helltide.timestamp, self.events.helltide.timestamp + ( 2 * 60 + 15 ) * 60 )
         if force_alert or self._should_alert_event( now, helltide_time, self.last_helltide_alert, HELLTIDE_ALERT_INTERVALS ):
-            LOG.info( f'Helltide event alert interval passed, performing event alert for {events.helltide} at {helltide_time}' )
+            LOG.info( f'Helltide event alert interval passed, performing event alert for {self.events.helltide} at {helltide_time}' )
             self.last_helltide_alert = now
-            await self._perform_event_alerts( f'The Helltide will rise in', helltide_time - now )
+            zone = HELLTIDE_ZONE_NAMES.get( self.events.helltide.zone, 'Sanctuary' )
+            await self._perform_event_alerts( f'The Helltide will rise in {zone} in', helltide_time - now )
 
-        self.last_events = events
+        self.last_events = self.events
 
     @events_checker.before_loop
     async def before_events_checker( self ):
         await self.bot.wait_until_ready()
 
-        for guild in self.bot.guilds:
-            self._check_guild_for_diablo_voice_channel( guild )
+        await self.events_retrieved.wait()
+
+    @tasks.loop( minutes=1 )
+    async def events_retriever( self ):
+        try:
+            events = await get_diablo_events()
+            if events != self.events:
+                LOG.info( f'New Diablo events retrieved: {self.events} -> {events}' )
+
+            self.events = events
+            self.events_retrieved.set()
+        except Exception as ex:
+            LOG.warning( f'Failed to retrieve Diablo events', exc_info=ex )
+
+    @events_retriever.before_loop
+    async def before_events_retriever( self ):
+        await self.bot.wait_until_ready()
