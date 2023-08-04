@@ -69,7 +69,7 @@ def diablo_events_to_alerts( now: datetime, last_alert_time: datetime, events: D
     )
 
     for event, event_time, event_text, alert_intervals in alert_configs:
-        for interval in sorted( alert_intervals ):
+        for interval in sorted( alert_intervals, reverse=True ):
             alert_time = event_time - interval
             if alert_time < last_alert_time:
                 continue
