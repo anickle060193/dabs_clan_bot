@@ -22,7 +22,7 @@ async def join_voice_chat( bot: commands.Bot, channel: discord.VoiceChannel | di
 
 async def play_voice_channel_audio( voice_client: discord.VoiceClient, source: discord.AudioSource ):
         while voice_client.is_playing():
-             await asyncio.sleep( 1.0 )
+             await asyncio.sleep( 0.25 )
 
         future = asyncio.get_running_loop().create_future()
 
