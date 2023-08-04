@@ -214,7 +214,7 @@ class DiabloEventsAlerter( commands.Cog ):
         try:
             events = await get_diablo_events()
             if events != self.events:
-                LOG.info( f'New Diablo events retrieved: {events}' )
+                LOG.debug( f'New Diablo events retrieved: {events}' )
                 self.events = events
                 self.events_retrieved.set()
         except Exception as ex:
