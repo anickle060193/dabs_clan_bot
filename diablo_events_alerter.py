@@ -11,7 +11,7 @@ import discord
 from discord.ext import tasks, commands
 
 from constants import DIABLO_VOICE_CHANNEL_IDS
-from diablo_events import HELLTIDE_ZONE_NAMES, DiabloEvents, get_diablo_events
+from diablo_events import HELLTIDE_ZONE_NAMES, DiabloBossEvent, DiabloEvents, DiabloHelltideEvent, DiabloLegionEvent, get_diablo_events
 from tts import TTS
 from utils import join_voice_chat, play_voice_channel_audio
 
@@ -22,21 +22,22 @@ BOSS_ALERT_INTERVALS = [
     timedelta( minutes=30 ),
     timedelta( minutes=15 ),
     timedelta( minutes=5 ),
-    timedelta( minutes=2 ),
     timedelta( minutes=1 ),
 ]
 
 LEGION_ALERT_INTERVALS = [
-    timedelta( minutes=3, seconds=45 ),
-    timedelta( minutes=1 ),
+    timedelta( minutes=4 ),
 ]
 
 HELLTIDE_ALERT_INTERVALS = [
     timedelta( minutes=1 ),
 ]
 
+DiabloEvent = DiabloBossEvent | DiabloLegionEvent | DiabloHelltideEvent
+
 @dataclass
 class DiabloEventAlert:
+    event: DiabloEvent
     text: str
     event_time: datetime
     alert_time: datetime
@@ -61,19 +62,20 @@ def diablo_events_to_alerts( now: datetime, last_alert_time: datetime, events: D
     helltide_zone = HELLTIDE_ZONE_NAMES.get( events.helltide.zone, 'Sanctuary' )
     helltide_text = f'The Helltide will rise in {helltide_zone} in'
 
-    alert_configs: Sequence[ tuple[ datetime, str, list[ timedelta ] ] ] = (
-        ( boss_time, boss_text, BOSS_ALERT_INTERVALS ),
-        ( legion_time, legion_text, LEGION_ALERT_INTERVALS ),
-        ( helltide_time, helltide_text, HELLTIDE_ALERT_INTERVALS ),
+    alert_configs: Sequence[ tuple[ DiabloEvent, datetime, str, list[ timedelta ] ] ] = (
+        ( events.boss, boss_time, boss_text, BOSS_ALERT_INTERVALS ),
+        ( events.legion, legion_time, legion_text, LEGION_ALERT_INTERVALS ),
+        ( events.helltide, helltide_time, helltide_text, HELLTIDE_ALERT_INTERVALS ),
     )
 
-    for event_time, event_text, alert_intervals in alert_configs:
-        for interval in alert_intervals:
+    for event, event_time, event_text, alert_intervals in alert_configs:
+        for interval in sorted( alert_intervals ):
             alert_time = event_time - interval
             if alert_time < last_alert_time:
                 continue
 
             alerts.append( DiabloEventAlert(
+                event=event,
                 text=event_text,
                 event_time=event_time,
                 alert_time=event_time - interval,
@@ -187,10 +189,13 @@ class DiabloEventsAlerter( commands.Cog ):
 
         now = datetime.now( tz=timezone.utc )
 
+        LOG.debug( f'Checking for Diablo event alerts: {now}' )
+
         alerts = diablo_events_to_alerts( now, self.last_alert_time, self.events )
 
         for alert in alerts:
             if self.first_alert or alert.alert_time <= now:
+                LOG.info( f'Performing event alert: now={now}, alert={alert}' )
                 await self._perform_event_alerts( alert.text, alert.event_time - now )
 
         self.last_alert_time = now
@@ -204,7 +209,7 @@ class DiabloEventsAlerter( commands.Cog ):
 
     @tasks.loop( minutes=1 )
     async def events_retriever( self ):
-        LOG.info( 'Retrieving Diablo events' )
+        LOG.debug( f'Retrieving Diablo events: {datetime.now( tz=timezone.utc )}' )
 
         try:
             events = await get_diablo_events()
