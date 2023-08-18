@@ -26,7 +26,7 @@ BOSS_ALERT_INTERVALS = [
 ]
 
 LEGION_ALERT_INTERVALS = [
-    timedelta( minutes=3, seconds=30 ),
+    timedelta( minutes=3 ),
 ]
 
 HELLTIDE_ALERT_INTERVALS = [
