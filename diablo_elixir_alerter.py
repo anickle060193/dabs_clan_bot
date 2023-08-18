@@ -15,7 +15,7 @@ from utils import join_voice_chat, play_voice_channel_audio
 LOG = logging.getLogger( __name__ )
 
 AFTER_JOIN_ALERT_DELAY = timedelta( minutes=1 )
-ALERT_INTERVAL = timedelta( minutes=15 )
+ALERT_INTERVAL = timedelta( minutes=10 )
 
 class DiabloElixirAlerter( commands.Cog ):
     def __init__( self, bot: commands.Bot ) -> None:
